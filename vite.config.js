@@ -1,8 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: "/yoga-routine-app/",
+  base: "/yoga-routine-app/", // ← exact name of your repo
 });
