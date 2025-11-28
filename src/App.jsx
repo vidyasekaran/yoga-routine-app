@@ -10,6 +10,7 @@ import threadNeedle from "./assets/thread-needle.jpg";
 import neckTilt from "./assets/neck-tilt.jpg";
 import neckTurn from "./assets/neck-turn.jpg";
 import chinTuck from "./assets/chin-tuck.jpg";
+import poseTransition from "./assets/pose-transition.svg";
 
 const SAMPLE_DATA = [
   {
@@ -43,6 +44,12 @@ const SAMPLE_DATA = [
     ],
   },
 ];
+
+const TRANSITION_SECONDS = 10;
+const PHASES = {
+  POSE: "POSE",
+  TRANSITION: "TRANSITION",
+};
 
 const styles = {
   app: {
@@ -241,20 +248,37 @@ function RoutinePlayer({
   onPauseResume,
   paused,
   onReset,
+  phase,
 }) {
   const current = poses[currentIndex];
   const next = poses[currentIndex + 1];
+  const isTransition = phase === PHASES.TRANSITION;
+  const displayPose = isTransition ? next ?? current : current;
+  const subtitle = isTransition
+    ? "Take 10 seconds to switch poses"
+    : "Hold this pose";
+  const infoLine = isTransition
+    ? next
+      ? `Up next: ${next.name} — ${next.duration}s`
+      : "Get ready to finish strong."
+    : next
+    ? `Next: ${next.name} — ${next.duration}s`
+    : "This is the last pose.";
+  const imageSrc = isTransition
+    ? poseTransition
+    : displayPose?.img ?? poseTransition;
 
   return (
     <div style={styles.routineScreen}>
-      <h2 style={{ margin: 0 }}>{current.name}</h2>
-      <div style={{ fontSize: 14, color: "#576" }}>Hold this pose</div>
+      <h2 style={{ margin: 0 }}>
+        {isTransition ? "Transition" : displayPose?.name ?? "Pose"}
+      </h2>
+      <div style={{ fontSize: 14, color: "#576" }}>{subtitle}</div>
 
-      {/* ⭐ Show pose image here */}
-      {current.img && (
+      {imageSrc && (
         <img
-          src={current.img}
-          alt={current.name}
+          src={imageSrc}
+          alt={isTransition ? "Transition" : displayPose?.name ?? "Pose"}
           style={{
             width: "300px",
             height: "300px",
@@ -267,14 +291,7 @@ function RoutinePlayer({
       )}
 
       <div style={styles.bigNumber}>{remaining}s</div>
-
-      {next ? (
-        <p style={{ marginTop: 8 }}>
-          Next: {next.name} — {next.duration}s
-        </p>
-      ) : (
-        <p style={{ marginTop: 8 }}>This is the last pose.</p>
-      )}
+      <p style={{ marginTop: 8 }}>{infoLine}</p>
 
       <div style={styles.routineButtons}>
         <button style={styles.btn} onClick={onPauseResume}>
@@ -299,6 +316,7 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remaining, setRemaining] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [phase, setPhase] = useState(PHASES.POSE);
 
   const selected = data.find((d) => d.id === selectedId) || data[0];
 
@@ -321,36 +339,23 @@ export default function App() {
     setCurrentIndex(0);
     setRemaining(selected.poses[0].duration);
     setPaused(false);
+    setPhase(PHASES.POSE);
   };
 
   const exitRoutine = () => {
     setIsPlaying(false);
     setPaused(false);
+    setPhase(PHASES.POSE);
   };
 
   const resetRoutine = () => {
     setCurrentIndex(0);
     setRemaining(selected.poses[0]?.duration ?? 0);
     setPaused(false);
+    setPhase(PHASES.POSE);
   };
 
   const pauseResume = () => setPaused((p) => !p);
-
-  // Advance safely to the next pose (functional update)
-  const handleAdvance = () => {
-    setCurrentIndex((i) => {
-      const next = i + 1;
-      if (next < selected.poses.length) {
-        // setRemaining based on the upcoming pose
-        setRemaining(selected.poses[next].duration);
-        return next;
-      } else {
-        // finished
-        setIsPlaying(false);
-        return i;
-      }
-    });
-  };
 
   useEffect(() => {
     if (!isPlaying || paused) return;
@@ -361,24 +366,37 @@ export default function App() {
           return r - 1;
         }
 
-        // When r === 1 → move to next pose
-        const nextIndex = currentIndex + 1;
+        if (phase === PHASES.POSE) {
+          const hasNext = currentIndex + 1 < selected.poses.length;
 
-        if (nextIndex < selected.poses.length) {
-          // move to next pose
-          setCurrentIndex(nextIndex);
-          // set duration of next pose
-          return selected.poses[nextIndex].duration;
+          if (hasNext) {
+            setPhase(PHASES.TRANSITION);
+            return TRANSITION_SECONDS;
+          }
+
+          setIsPlaying(false);
+          return 0;
         }
 
-        // finished routine
-        setIsPlaying(false);
+        if (phase === PHASES.TRANSITION) {
+          const nextIndex = currentIndex + 1;
+
+          if (nextIndex < selected.poses.length) {
+            setCurrentIndex(nextIndex);
+            setPhase(PHASES.POSE);
+            return selected.poses[nextIndex].duration;
+          }
+
+          setIsPlaying(false);
+          return 0;
+        }
+
         return 0;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isPlaying, paused, selected, currentIndex]);
+  }, [isPlaying, paused, selected, currentIndex, phase]);
 
   // If playing, show runner UI
   if (isPlaying) {
@@ -398,6 +416,7 @@ export default function App() {
             onPauseResume={pauseResume}
             paused={paused}
             onReset={resetRoutine}
+            phase={phase}
           />
         </main>
       </div>
